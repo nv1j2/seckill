@@ -1,7 +1,7 @@
 # Java高并发秒杀系统
 <pre>
 这是一个 Java高并发秒杀系统
-本体源于http://www.imooc.com/u/2145618/courses?sort=publish
+本体源于http://www.imooc.com/u/2145618/courses
 这里更改了很多
 使用Amoeba分离，Mysql集群，RabbitMQ，Redis
 并且在前端进行了进一步的优化
