@@ -1,0 +1,113 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+       xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+       xmlns:context="http://www.springframework.org/schema/context"
+       xmlns:rabbit="http://www.springframework.org/schema/rabbit"
+       xsi:schemaLocation="http://www.springframework.org/schema/beans
+        http://www.springframework.org/schema/beans/spring-beans-4.0.xsd
+        http://www.springframework.org/schema/rabbit
+        http://www.springframework.org/schema/rabbit/spring-rabbit-1.4.xsd
+        http://www.springframework.org/schema/context 
+        http://www.springframework.org/schema/context/spring-context-4.0.xsd">
+    <!--配置整合mybatis过程
+    1.配置数据库相关参数-->
+    <context:property-placeholder location="classpath:*.properties"/>
+    
+
+    <!--2.数据库连接池-->
+    <bean id="dataSource" class="com.mchange.v2.c3p0.ComboPooledDataSource">
+        <!--配置连接池属性-->
+        <property name="driverClass" value="${driver}" />
+
+        <!-- 基本属性 url、user、password -->
+        <property name="jdbcUrl" value="${url}" />
+        <property name="user" value="${jdbc.username}" />
+        <property name="password" value="${password}" />
+
+        <!--c3p0私有属性-->
+        <property name="maxPoolSize" value="30"/>
+        <property name="minPoolSize" value="10"/>
+        <!--关闭连接后不自动commit-->
+        <property name="autoCommitOnClose" value="false"/>
+
+        <!--获取连接超时时间-->
+        <property name="checkoutTimeout" value="1000"/>
+        <!--当获取连接失败重试次数-->
+        <property name="acquireRetryAttempts" value="2"/>
+    </bean>
+
+    <!--约定大于配置-->
+    <!--３.配置SqlSessionFactory对象-->
+    <bean id="sqlSessionFactory" class="org.mybatis.spring.SqlSessionFactoryBean">
+        <!--往下才是mybatis和spring真正整合的配置-->
+        <!--注入数据库连接池-->
+        <property name="dataSource" ref="dataSource"/>
+        <!--配置mybatis全局配置文件:mybatis-config.xml-->
+        <property name="configLocation" value="classpath:mybatis-config.xml"/>
+        <!--扫描entity包,使用别名,多个用;隔开-->
+        <property name="typeAliasesPackage" value="cn.codingxiaxw.entity"/>
+        <!--扫描sql配置文件:mapper需要的xml文件-->
+        <property name="mapperLocations" value="classpath:mapper/*.xml"/>
+    </bean>
+
+    <!--４:配置扫描Dao接口包,动态实现DAO接口,注入到spring容器-->
+    <bean class="org.mybatis.spring.mapper.MapperScannerConfigurer">
+        <!--注入SqlSessionFactory-->
+        <property name="sqlSessionFactoryBeanName" value="sqlSessionFactory"/>
+        <!-- 给出需要扫描的Dao接口-->
+        <property name="basePackage" value="cn.codingxiaxw.dao"/>
+    </bean>
+
+	<!-- <context:property-placeholder location="classpath:redis.properties/> -->
+	<!-- RedisDao -->
+	<bean id="redisDao" class="cn.codingxiaxw.dao.cache.RedisDao">
+		
+		<constructor-arg index="0" value="${host}"></constructor-arg>
+		<constructor-arg index="1" value="${port}"></constructor-arg>
+	</bean>
+
+
+
+
+    <!-- RabbitMQ -->
+
+
+    <!-- 定义RabbitMQ的连接工厂 -->
+    <rabbit:connection-factory id="connectionFactory"
+        host="${rabbit.ip}" port="${rabbit.port}" username="${rabbit.username}" password="${rabbit.password}"
+        virtual-host="${rabbit.vhost}" />
+
+    <!-- 定义Rabbit模板，指定连接工厂以及定义exchange -->
+    <rabbit:template id="amqpTemplate" connection-factory="connectionFactory"
+        exchange="itemDirectExchange" />
+
+    <!-- MQ的管理，包括队列、交换器等 -->
+    <rabbit:admin connection-factory="connectionFactory" />
+
+    <!-- 定义交换器，自动声明,durable持久化 -->
+    <rabbit:direct-exchange name="itemDirectExchange" auto-declare="true" durable="true">
+    </rabbit:direct-exchange>
+    
+    
+    
+    <!-- 定义消息队列 -->
+    <rabbit:queue name="infoQueue" auto-declare="true"/>
+    
+    <!-- 定义交换机，并且完成队列和交换机的绑定 -->
+    <rabbit:direct-exchange name="itemDirectExchange" auto-declare="true">
+        <rabbit:bindings>
+            <!-- 前台系统只接收商品更新的消息，key路由key -->
+            <rabbit:binding queue="infoQueue" key="queueTestKey"/>
+        </rabbit:bindings>
+    </rabbit:direct-exchange>
+    
+    <bean id="messageReceiver" class="cn.codingxiaxw.service.impl.SeckillServiceImpl_sql"></bean>
+    
+    <!-- 定义监听 -->
+    <rabbit:listener-container connection-factory="connectionFactory">
+        <!-- 监听一个队列，当队列中有消息，就会自动触发类.方法，传递消息就作为方法的参数，根据方法声明的参数强转 -->
+        <rabbit:listener ref="messageReceiver" method="recvUserInfo" queue-names="infoQueue"/>
+    </rabbit:listener-container>
+    
+
+</beans>
